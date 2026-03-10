@@ -1,4 +1,23 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, type ReactNode } from "react";
+
+type Employee = {
+  id: number;
+  subgrade: string;
+  grade: number;
+  yIdx: number;
+  yPos: number;
+  years: number;
+  name: string;
+};
+
+type ActionState = Record<number, string[]>;
+type TooltipState = { e: Employee; cx: number; cy: number } | null;
+type PillProps = {
+  children: ReactNode;
+  active: boolean;
+  color: string;
+  onClick: () => void;
+};
 
 const C = {
   blue:     "#394A76",
@@ -34,12 +53,12 @@ const SUBGRADES = [
   { key:"6A", grade:6, label:"6A", position:"ผู้บริหารระดับสูง" },
 ];
 
-const DIST = {"1A":30,"2B":28,"2A":22,"3C":22,"3B":18,"3A":14,"4C":12,"4B":9,"4A":7,"5B":6,"5A":4,"6B":3,"6A":2};
-const YEAR_RANGE = {
+const DIST: Record<string, number> = {"1A":30,"2B":28,"2A":22,"3C":22,"3B":18,"3A":14,"4C":12,"4B":9,"4A":7,"5B":6,"5A":4,"6B":3,"6A":2};
+const YEAR_RANGE: Record<string, [number, number]> = {
   "1A":[0,5],"2B":[1,6],"2A":[2,8],"3C":[2,7],"3B":[3,10],"3A":[4,13],
   "4C":[5,10],"4B":[6,12],"4A":[7,14],"5B":[8,13],"5A":[9,15],"6B":[10,15],"6A":[11,15],
 };
-const GRADE_DOT = {1:"#c5cad4",2:"#8fa3bf",3:"#5a72a8",4:"#394A76",5:"#EC5924",6:"#a83e18"};
+const GRADE_DOT: Record<number, string> = {1:"#c5cad4",2:"#8fa3bf",3:"#5a72a8",4:"#394A76",5:"#EC5924",6:"#a83e18"};
 
 const ACTION_TAGS = [
   { key:"promote",    label:"เลื่อนตำแหน่ง",      color:"#1a7340", bg:"#edfaf3" },
@@ -54,29 +73,29 @@ const RISK_ITEMS = [
   { icon:"💡", title:"Organizational Waste", color:C.blue,   body:"ประสบการณ์สูงแต่ถูก assign งานระดับต้น ศักยภาพไม่ถูกออกมา กระทบ morale ทีม" },
 ];
 
-function seededRandom(seed) {
+function seededRandom(seed: number) {
   let s = seed;
   return () => { s=(s*16807)%2147483647; return (s-1)/2147483646; };
 }
-function generateEmployees() {
-  const rng=seededRandom(42); const emps=[]; let id=1;
+function generateEmployees(): Employee[] {
+  const rng=seededRandom(42); const emps: Employee[]=[]; let id=1;
   const total=190, tw=Object.values(DIST).reduce((a,b)=>a+b,0);
-  let rem=total; const counts={};
+  let rem=total; const counts: Record<string, number>={};
   SUBGRADES.forEach((sg,i)=>{ if(i<SUBGRADES.length-1){counts[sg.key]=Math.round((DIST[sg.key]/tw)*total);rem-=counts[sg.key];}else counts[sg.key]=rem; });
   SUBGRADES.forEach(sg=>{ const [mn,mx]=YEAR_RANGE[sg.key]; for(let i=0;i<counts[sg.key];i++){ const years=+(mn+rng()*(mx-mn)).toFixed(1); const yIdx=SUBGRADES.findIndex(s=>s.key===sg.key); emps.push({id:id++,subgrade:sg.key,grade:sg.grade,yIdx,yPos:yIdx+(rng()-0.5)*0.36,years,name:`พนักงาน #${id-1}`}); } });
   return emps;
 }
 const ALL_EMP = generateEmployees();
-const isAtRisk = e => e.years>=10 && e.grade<=3;
+const isAtRisk = (e: Employee) => e.years>=10 && e.grade<=3;
 
-const Pill = ({children,active,color,onClick}) => (
+const Pill = ({children,active,color,onClick}: PillProps) => (
   <button onClick={onClick} style={{padding:"4px 13px",borderRadius:20,border:`1.5px solid ${active?color:"#3a4e7a"}`,background:active?color:"transparent",color:active?"#fff":C.sub,cursor:"pointer",fontSize:11,fontWeight:active?700:500,transition:"all 0.15s",whiteSpace:"nowrap"}}>
     {children}
   </button>
 );
 
 export default function App() {
-  const containerRef = useRef(null);
+  const containerRef = useRef<HTMLDivElement | null>(null);
   const [cw, setCw] = useState(900);
 
   useEffect(() => {
@@ -87,12 +106,12 @@ export default function App() {
     return () => obs.disconnect();
   }, []);
 
-  const [hovered,setHovered] = useState(null);
-  const [tooltip,setTooltip] = useState(null);
-  const [filterGrade,setFG]  = useState(null);
+  const [hovered,setHovered] = useState<number | null>(null);
+  const [tooltip,setTooltip] = useState<TooltipState>(null);
+  const [filterGrade,setFG]  = useState<number | null>(null);
   const [onlyRisk,setOnly]   = useState(false);
-  const [selEmp,setSel]      = useState(null);
-  const [acts,setActs]       = useState({});
+  const [selEmp,setSel]      = useState<Employee | null>(null);
+  const [acts,setActs]       = useState<ActionState>({});
   const [riskOpen,setRisk]   = useState(false);
 
   // responsive breakpoints
@@ -110,19 +129,50 @@ export default function App() {
   const pW     = SVG_W - PAD.left - PAD.right;
   const pH     = SVG_H - PAD.top  - PAD.bottom;
 
-  const xSc = v => (v/15)*pW;
-  const ySc = i => pH-(i/(SUBGRADES.length-1))*pH;
+  const xSc = (v: number) => (v/15)*pW;
+  const ySc = (i: number) => pH-(i/(SUBGRADES.length-1))*pH;
   const xTicks = compact ? [0,5,10,15] : [0,2,4,6,8,10,12,14];
 
   const atRisk   = ALL_EMP.filter(isAtRisk);
   const avgYears = (ALL_EMP.reduce((s,e)=>s+e.years,0)/ALL_EMP.length).toFixed(1);
-  const actioned = Object.keys(acts).filter(id=>acts[id]?.length>0).length;
+  const actioned = Object.values(acts).filter(v=>v?.length>0).length;
   const topG     = Math.max(...atRisk.map(e=>e.grade));
+
+  const tenureBuckets = [
+    { label: "0-3 ปี", min: 0, max: 3 },
+    { label: "3-6 ปี", min: 3, max: 6 },
+    { label: "6-9 ปี", min: 6, max: 9 },
+    { label: "9-12 ปี", min: 9, max: 12 },
+    { label: "12-15 ปี", min: 12, max: 15.1 },
+  ];
+  const bucketStats = tenureBuckets.map(b => {
+    const group = ALL_EMP.filter(e => e.years >= b.min && e.years < b.max);
+    const risk = group.filter(isAtRisk).length;
+    return {
+      label: b.label,
+      total: group.length,
+      risk,
+      normal: group.length - risk,
+    };
+  });
+  const maxBucketTotal = Math.max(...bucketStats.map(b => b.total), 1);
+
+  const subgradeStats = SUBGRADES.map(sg => {
+    const group = ALL_EMP.filter(e => e.subgrade === sg.key);
+    const risk = group.filter(isAtRisk).length;
+    return {
+      ...sg,
+      total: group.length,
+      risk,
+      riskPct: group.length ? (risk / group.length) * 100 : 0,
+    };
+  });
+  const maxSubRiskPct = Math.max(...subgradeStats.map(s => s.riskPct), 1);
 
   let dots = filterGrade ? ALL_EMP.filter(e=>e.grade===filterGrade) : ALL_EMP;
   if (onlyRisk) dots = dots.filter(isAtRisk);
 
-  const toggle=(eid,key)=>setActs(p=>{const c=p[eid]||[];return{...p,[eid]:c.includes(key)?c.filter(k=>k!==key):[...c,key]};});
+  const toggle=(eid: number,key: string)=>setActs(p=>{const c=p[eid]||[];return{...p,[eid]:c.includes(key)?c.filter(k=>k!==key):[...c,key]};});
 
   const kpis=[
     {label:"พนักงานทั้งหมด",      val:ALL_EMP.length,  unit:"คน", sub:"ข้อมูล ณ ปัจจุบัน",           alert:false},
@@ -382,7 +432,11 @@ export default function App() {
                 {(acts[selEmp.id]||[]).length>0&&(
                   <div style={{marginTop:12,padding:"9px 11px",background:"#1a2644",borderRadius:7,border:`1px solid ${C.border}`}}>
                     <div style={{fontSize:10,fontWeight:700,color:"#fff",marginBottom:5}}>✅ Action ที่เลือก</div>
-                    {(acts[selEmp.id]||[]).map(k=>{const a=ACTION_TAGS.find(x=>x.key===k);return <div key={k} style={{fontSize:11,color:a.color,fontWeight:600,marginBottom:2}}>· {a.label}</div>;})}
+                    {(acts[selEmp.id]||[]).map(k=>{
+                      const a=ACTION_TAGS.find(x=>x.key===k);
+                      if(!a) return null;
+                      return <div key={k} style={{fontSize:11,color:a.color,fontWeight:600,marginBottom:2}}>· {a.label}</div>;
+                    })}
                   </div>
                 )}
               </div>
@@ -405,6 +459,58 @@ export default function App() {
               </div>
             );
           })}
+        </div>
+
+        {/* ── ADDITIONAL VISUALS FOR STAGNATION ── */}
+        <div style={{display:"grid",gridTemplateColumns:wide?"1.2fr 1fr":"1fr",gap:10}}>
+          <div style={{background:"#ffffff",borderRadius:12,padding:compact?"12px":"14px 16px",border:"1px solid #e0e4f0",boxShadow:"0 3px 14px rgba(0,0,0,0.15)"}}>
+            <div style={{fontSize:12,fontWeight:700,color:C.blue,marginBottom:2}}>Tenure Pressure Distribution</div>
+            <div style={{fontSize:10,color:"#6b7280",marginBottom:10}}>ดูว่าพนักงานกระจุกที่ช่วงอายุงานใด และมีสัดส่วนกลุ่มน่าเป็นห่วงแค่ไหนในแต่ละช่วง</div>
+            <div style={{display:"flex",flexDirection:"column",gap:8}}>
+              {bucketStats.map((b, i) => {
+                const totalW = (b.total / maxBucketTotal) * 100;
+                const riskW = b.total ? (b.risk / b.total) * 100 : 0;
+                return (
+                  <div key={i} style={{display:"grid",gridTemplateColumns:compact?"68px 1fr 58px":"76px 1fr 72px",gap:8,alignItems:"center"}}>
+                    <div style={{fontSize:10.5,fontWeight:700,color:"#4b5563"}}>{b.label}</div>
+                    <div style={{height:14,background:"#eef1f8",borderRadius:999,position:"relative",overflow:"hidden"}}>
+                      <div style={{width:`${totalW}%`,height:"100%",background:"#d8e0ef",borderRadius:999}} />
+                      <div style={{position:"absolute",left:0,top:0,height:"100%",width:`${(totalW * riskW) / 100}%`,background:C.orange,borderRadius:999}} />
+                    </div>
+                    <div style={{fontSize:10,color:"#6b7280",textAlign:"right"}}>
+                      <b style={{color:"#111827"}}>{b.total}</b> / <span style={{color:C.orange,fontWeight:700}}>{b.risk}</span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+            <div style={{display:"flex",gap:12,marginTop:10,flexWrap:"wrap"}}>
+              <span style={{display:"inline-flex",alignItems:"center",gap:5,fontSize:10,color:"#6b7280"}}><span style={{width:10,height:10,borderRadius:999,background:"#d8e0ef",display:"inline-block"}} />พนักงานทั้งหมด</span>
+              <span style={{display:"inline-flex",alignItems:"center",gap:5,fontSize:10,color:"#6b7280"}}><span style={{width:10,height:10,borderRadius:999,background:C.orange,display:"inline-block"}} />กลุ่มน่าเป็นห่วง</span>
+            </div>
+          </div>
+
+          <div style={{background:"#ffffff",borderRadius:12,padding:compact?"12px":"14px 16px",border:"1px solid #e0e4f0",boxShadow:"0 3px 14px rgba(0,0,0,0.15)"}}>
+            <div style={{fontSize:12,fontWeight:700,color:C.blue,marginBottom:2}}>Sub-Grade Stagnation Heatmap</div>
+            <div style={{fontSize:10,color:"#6b7280",marginBottom:10}}>เจาะราย Sub-Grade ว่าจุดใดมีอัตราเสี่ยงสูง เพื่อจัดลำดับมาตรการก่อนหลัง</div>
+            <div style={{display:"flex",flexDirection:"column",gap:6,maxHeight:compact?"none":220,overflowY:"auto",paddingRight:2}}>
+              {subgradeStats.map((s, i) => {
+                const intensity = s.riskPct / maxSubRiskPct;
+                return (
+                  <div key={i} style={{display:"grid",gridTemplateColumns:compact?"34px 1fr 52px":"38px 1fr 62px",alignItems:"center",gap:8}}>
+                    <div style={{fontSize:10,fontWeight:700,color:C.blue,textAlign:"center",background:`${C.blue}12`,borderRadius:4,padding:"2px 0"}}>{s.label}</div>
+                    <div style={{height:16,borderRadius:4,background:"#f4f6fb",position:"relative",overflow:"hidden"}}>
+                      <div style={{position:"absolute",inset:0,background:`rgba(236, 89, 36, ${0.1 + intensity * 0.7})`}} />
+                      <div style={{position:"absolute",left:8,top:0,fontSize:9.5,lineHeight:"16px",fontWeight:700,color:intensity>0.55?"#fff":"#7c2d12"}}>
+                        {s.risk} / {s.total} คน
+                      </div>
+                    </div>
+                    <div style={{fontSize:10.5,fontWeight:700,color:s.riskPct>0?C.orange:"#9ca3af",textAlign:"right"}}>{s.riskPct.toFixed(0)}%</div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
         </div>
 
         {/* caption */}
